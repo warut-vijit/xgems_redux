@@ -13,6 +13,7 @@ import argparse
 import tensorflow as tf
 import importlib
 from tensorflow.python.framework import ops
+
 sys.path.append(os.path.join(os.path.dirname(__file__),'hi_vae'))
 #from hi_vae import VAE_functions
 ops.reset_default_graph()
@@ -55,7 +56,7 @@ class explainer(object):
         self.lambda_reg = tf.placeholder(tf.float32, shape=(),name='lambda')
 
         #_,self.bz_op,_,_,_ = self.genobj.autoencoder(self.x_star,self.x_star,np.prod(self.x_dim),self.z_dim,n_hidden=10,keep_prob=1)
-        self.bz_op,_ = self.genobj.gaussian_MLP_encoder(self.x_star,n_output=self.z_dim,n_hidden=100,keep_prob=1)
+        self.bz_op,_ = self.genobj.encoder(self.x_star,n_output=self.z_dim,n_hidden=100,keep_prob=1)
 
         self.f_ = self.genobj.decoder(self.z,np.prod(self.x_dim),n_hidden=100,reuse=False)
         self.ypred = self.classobj(self.f_,self.y_star)
@@ -190,7 +191,7 @@ class explainer(object):
             file_log.close()
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(' ',allow_abbrev=False)
+    parser = argparse.ArgumentParser(' ')#,allow_abbrev=False)
     parser.add_argument('--data', type=str, default='defaultCredit')
     parser.add_argument('--generator',type=str,default='reg_vae')
     parser.add_argument('--classifier',type=str,default='softmax')
@@ -211,19 +212,21 @@ if __name__ == '__main__':
     model = importlib.import_module('explainer_utils')
     #con_detector = importlib.import_module(args.data + '.entities_celebA_vae_resnet_bn_gender',package='..')
 
-    xs = data.DataSampler()
+    xs = data.IHDPDataSampler()
     generator = model.generator(args.data + '/' + args.generator)
 
     if args.classifier==None:
         raise ValueError('Classifier cannot be none')
     else:
         classifier = model.classifier(args.data + '/' + args.classifier)
-        classifierpath='/scratch/gobi1/shalmali/'+args.data + '/classifier/'
-        classobj_path= args.classifier 
+        #classifierpath = '/scratch/gobi1/shalmali/'+args.data + '/classifier/'
+        classifierpath = 'classifier/' + args.classifier + '_0.1/'
+        classobj_path= args.classifier
         class_vsname = args.data  + '/' + args.classifier
 
 
-    generatorpath='/scratch/gobi1/shalmali/' +args.data + '/' + args.generator + '/'
+    generatorpath = 'generator/' + args.generator 
+    #generatorpath = '/scratch/gobi1/shalmali/' +args.data + '/' + args.generator + '/'
     #genobj_path = args.data + '.hi_vae.model_HIVAE_inputDropout'
     genobj_path = args.generator + '.vae'
     gen_vsname = args.data + '/' + args.generator

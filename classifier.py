@@ -31,7 +31,7 @@ class classifier(object):
         self.target=tf.placeholder(tf.float32,[None,self.n_labels],name='y_')
 
         self.modelop = self.model(self.x,self.target)
-        self.modeloptimizer = self.model.train(0.1)
+        self.modeloptimizer = self.model.train(0.01)
         self.corrpred = tf.equal(tf.argmax(self.modelop,1),tf.argmax(self.target,1))
         #print('modelop',self.modelop.shape,self.target.shape)
         #self.corrpred=tf.equal(tf.to_int32(tf.greater(self.modelop,0.5)),tf.to_int32(self.target))
@@ -101,7 +101,7 @@ if __name__ == '__main__':
     
     os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
     
-    data = importlib.import_module(args.data)
+    data = importlib.import_module(args.data +'.data_utils')
     model = importlib.import_module(args.data +'.'+args.estimator)
     
     reg_penalty = float(args.reg)
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     estobj.name = args.data + '/' + args.estimator
     #estobj.set_params(args.params)
     
-    dataobj = data.DataSampler()
+    dataobj = data.IHDPDataSampler()
 
     modelpath=args.modelpath
     resultpath=args.resultpath

@@ -95,3 +95,9 @@ def decoder(z, dim_img, n_hidden,reuse=True):
     y = bernoulli_MLP_decoder(z, n_hidden, dim_img, 1.0, reuse=reuse)
 
     return y
+
+def encoder(x, n_hidden, n_output, keep_prob=1):
+
+    mu, sigma = gaussian_MLP_encoder(x, n_hidden, n_output, keep_prob)
+
+    return mu, sigma

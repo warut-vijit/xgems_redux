@@ -4,8 +4,9 @@ import tensorflow.contrib.layers as tcl
 
 class estimator(object):
     def __init__(self,reg_penalty=0.):
-        self.x_dim = 20
-        self.n_labels = 2
+        self.x_dim = 25 #20
+        self.n_labels = 1 #2
+        self.n_hidden = 64
         self._name = None
         self.reg_penalty=reg_penalty
 
@@ -13,13 +14,19 @@ class estimator(object):
         with tf.variable_scope(self._name) as vs:
             if reuse:
                 vs.reuse_variables()
-            self.W = tf.get_variable(name="W",shape=[self.x_dim,self.n_labels])
-            self.b = tf.get_variable(name="b",shape=[self.n_labels])
-            self.model_output = tf.matmul(xin,self.W)+self.b
-            self.y=tf.nn.softmax(self.model_output)
+            self.W0 = tf.get_variable(name="W0",shape=[self.x_dim,self.n_hidden])
+            self.b0 = tf.get_variable(name="b0",shape=[self.n_hidden])
+            h0 = tf.matmul(xin,self.W0)+self.b0
+            h0= tf.nn.tanh(h0)
+            self.W1 = tf.get_variable(name="W1",shape=[self.n_hidden,self.n_labels])
+            self.b1 = tf.get_variable(name="b1",shape=[self.n_labels])
+            self.model_output = tf.matmul(h0,self.W1)+self.b1
+            self.y = self.model_output
+            #self.y=tf.nn.softmax(self.model_output)
             self.target = target
-            self.crossentropy=tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.model_output,labels=self.target))
-            self.l1_penalty = tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(scale=self.reg_penalty),[self.W])
+            self.crossentropy = tf.reduce_mean(tf.squared_difference(self.model_output, self.target))
+            #self.crossentropy=tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.model_output,labels=self.target))
+            self.l1_penalty = tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(scale=self.reg_penalty),[self.W0, self.W1])
             self.crossentropy = self.crossentropy + self.l1_penalty
             return self.y
 
@@ -28,7 +35,8 @@ class estimator(object):
             if reuse:
                 vs.reuse_variables()
             self.model_output = tf.matmul(xin,self.W)+self.b
-            self.y=tf.nn.softmax(self.model_output)
+            self.y = self.model_output
+            #self.y=tf.nn.softmax(self.model_output)
             return self.y
 
     @property
