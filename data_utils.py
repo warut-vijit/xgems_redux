@@ -53,7 +53,7 @@ class IHDPDataSampler(object):
             replica_path = self.path + '/ihdp_npci_' + str(i + 1) + '.csv'
             data.append(np.loadtxt(replica_path, delimiter=','))
         data = np.vstack(data)
-        self.n_labels = 2
+        self.n_labels = 1
         t, y = data[:, 0][:, np.newaxis], data[:, 1][:, np.newaxis]
         #x = np.hstack([t, data[:, 5:]]) # fields 3 and 4 are mus and not used.
         x = data[:, 5:]

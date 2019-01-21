@@ -94,6 +94,7 @@ class explainer(object):
             self.z.load(bz,session=self.sess)
             
             x_gen0,ypred0 = self.sess.run([self.f_, self.ypred],feed_dict={self.x_star:x_star,self.y_star:y_star})
+            print(ypred0)
  
             ypredorig = self.sess.run(self.ypred_orig,feed_dict={self.x_star:x_star,self.y_star:y_star})
             
