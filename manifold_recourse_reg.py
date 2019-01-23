@@ -129,7 +129,9 @@ class explainer(object):
 
             print('Decoder at init:', np.min(x_gen0), np.max(x_gen0), 'label:' ,ypred0,'original pred:', ypredorig)
 
-            if np.argmax(ypred0[0,:])==np.argmax(y_star[0,:]):
+            recon_above = (ypred0[0,:] >= 6.5)
+            ystar_above = (y_star[0,:] >= 6.5)
+            if recon_above == ystar_above:
                 print('Reconstruction classified correctly')
                 str_n = str(n) + '_' + '1'
             else:
@@ -148,7 +150,7 @@ class explainer(object):
             np.savetxt(filename,x_in)
 
             file_log = open(dest_path + '/confidence_prediction.txt','w+')
-            filename =  (dest_path +'/t{}_pred{}.txt').format(1,np.argmax(ypred0[0,:]))
+            filename =  (dest_path +'/t{}_pred{}.txt').format(1,recon_above)
             np.savetxt(filename,x_gen0)
 
             file_log.write('0' + ',' + str(ypredorig[0,0])+'\n')
@@ -164,7 +166,8 @@ class explainer(object):
                 
                 _, loss1, reg, gvs, y_pred, f_in = self.sess.run([self.grad_map,self.loss1,self.reg,self.gvs,self.ypred,self.f_],feed_dict={self.x_star:x_star,self.y_star:y_star,self.y_tar:y_tar,self.lambda_reg:0.0001})
 
-                if np.argmax(y_pred[0,:])==np.argmax(y_tar[0,:]) and break_t==iter_max:
+                # success if new prediction > target
+                if y_pred[0,:]>=y_tar[0,:] and break_t==iter_max:
                     print('predicted change in label', y_pred[0,0], t, y_tar[0,0])
                     break_t = t+10
 
@@ -180,7 +183,7 @@ class explainer(object):
 
                 if t %100 == 0 or t%1==0:
                     if t%100==0:
-                        print('Iter [%8d] loss_entropy [%.4f] reg [%.4f] gradient Norm [%.4f] predicted_label [%.4f]'% (t,loss1,reg,np.linalg.norm(gvs[0]), np.argmax(y_pred[0,:])))
+                        print('Iter [%8d] loss_entropy [%.4f] reg [%.4f] gradient Norm [%.4f] predicted_label [%.4f]'% (t,loss1,reg,np.linalg.norm(gvs[0]), y_pred[0,:]))
                         #print('ypred',y_pred[0,:],'y_tar', y_tar[0,:])
                         filename =  (dest_path + '/t{}_pred{}.txt').format(t+2,int(y_pred[0,0]>0.5))
                         np.savetxt(filename,f_in)
