@@ -54,20 +54,24 @@ class IHDPDataSampler(object):
             data.append(np.loadtxt(replica_path, delimiter=','))
         data = np.vstack(data)
         self.n_labels = 1
-        t, y = data[:, 0][:, np.newaxis], data[:, 1][:, np.newaxis]
+        t, y, y_ctf = data[:, 0][:, np.newaxis], data[:, 1][:, np.newaxis], data[:, 2][:, np.newaxis]
         #x = np.hstack([t, data[:, 5:]]) # fields 3 and 4 are mus and not used.
         x = data[:, 5:]
-        self.xtrain, self.xtest, self.ytrain, self.ytest = train_test_split(x, y, test_size=0.1)
+        self.xtrain, self.xtest, self.ttrain, self.ttest, self.ytrain, self.ytest, self.yctftrain, self.yctftest = train_test_split(x, t, y, y_ctf, test_size=0.1)
 
-        print(self.xtrain.shape, self.ytrain.shape, self.xtest.shape, self.ytest.shape)
+        print(self.xtrain.shape, self.ttrain.shape, self.ytrain.shape, self.yctftrain.shape)
+        print(self.xtest.shape, self.ttest.shape, self.ytest.shape, self.yctftest.shape)
         self.n_samples,self.n_features=self.xtrain.shape
         self.n_samples_test = self.xtest.shape[0]
         self.shape=[self.n_features]
 
-    def __call__(self, batch_size,batch_index,normalized=True):
+    def __call__(self, batch_size,batch_index,normalized=True,ctf=False):
         idx_start=batch_index*batch_size
         idx_end=(batch_index+1)*batch_size
-        return self.xtrain[idx_start:idx_end,:],self.ytrain[idx_start:idx_end,:]
+        if ctf: 
+            return self.xtrain[idx_start:idx_end,:],self.ytrain[idx_start:idx_end,:],self.ttrain[idx_start:idx_end,:],self.yctftrain[idx_start:idx_end,:]
+        else:
+            return self.xtrain[idx_start:idx_end,:],self.ytrain[idx_start:idx_end,:]
 
     def get_test(self):
         return self.xtest, self.ytest
@@ -122,8 +126,7 @@ class TwinsDataSampler(object):
 
     def get_test(self):
         return self.xtest, self.ytest
-
-    def get_test_i(self,i):
+def get_test_i(self,i):
         return np.reshape(self.xtest[i,:],[1,-1]),np.reshape(self.ytest[i,:],[1,-1])
 
 
