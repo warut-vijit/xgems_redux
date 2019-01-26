@@ -4,8 +4,8 @@ import tensorflow.contrib.layers as tcl
 
 class estimator(object):
     def __init__(self,reg_penalty=0.):
-        self.x_dim = 25 #20
-        self.n_labels = 1 #2
+        self.x_dim = 344 #20
+        self.n_labels = 2
         self.n_hidden = 64
         self._name = None
         self.reg_penalty=reg_penalty
@@ -21,11 +21,11 @@ class estimator(object):
             self.W1 = tf.get_variable(name="W1",shape=[self.n_hidden,self.n_labels])
             self.b1 = tf.get_variable(name="b1",shape=[self.n_labels])
             self.model_output = tf.matmul(h0,self.W1)+self.b1
-            self.y = self.model_output
-            #self.y=tf.nn.softmax(self.model_output)
+            #self.y = self.model_output
+            self.y=tf.nn.softmax(self.model_output)
             self.target = target
-            self.crossentropy = tf.reduce_mean(tf.squared_difference(self.model_output, self.target))
-            #self.crossentropy=tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.model_output,labels=self.target))
+            #self.crossentropy = tf.reduce_mean(tf.squared_difference(self.model_output, self.target))
+            self.crossentropy=tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.model_output,labels=self.target))
             self.l1_penalty = tf.contrib.layers.apply_regularization(tf.contrib.layers.l1_regularizer(scale=self.reg_penalty),[self.W0, self.W1])
             self.crossentropy = self.crossentropy + self.l1_penalty
             return self.y

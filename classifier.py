@@ -40,10 +40,10 @@ class classifier(object):
         self.accuracy = tf.reduce_mean(tf.cast(self.corrpred,tf.float32))
         
         self.f1 = tf.contrib.metrics.f1_score(self.true_labels,self.pred_labels)
-        #self.fp = tf.metrics.false_positives(self.true_labels,self.modelop)
-        #self.fn = tf.metrics.false_negatives(self.true_labels,self.modelop)
-        #self.tp = tf.metrics.true_positives(self.true_labels,self.modelop)
-        #self.tn = tf.metrics.true_negatives(self.true_labels,self.modelop)
+        #self.fp = tf.metrics.false_positives(self.true_labels,self.pred_labels)
+        #self.fn = tf.metrics.false_negatives(self.true_labels,self.pred_labels)
+        #self.tp = tf.metrics.true_positives(self.true_labels,self.pred_labels)
+        #self.tn = tf.metrics.true_negatives(self.true_labels,self.pred_labels)
 
         all_vars = tf.global_variables()
         var_dict = {v.op.name: v for v in all_vars}
@@ -110,7 +110,7 @@ if __name__ == '__main__':
     estobj.name = args.data + '/' + args.estimator
     #estobj.set_params(args.params)
     
-    dataobj = data.IHDPDataSampler()
+    dataobj = data.TwinsDataSampler()
 
     modelpath=args.modelpath
     resultpath=args.resultpath

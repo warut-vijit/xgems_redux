@@ -1,8 +1,9 @@
 import numpy as np
-import scipy
+import scipy.stats,scipy.special
 import os, sys
 from sklearn.preprocessing import StandardScaler, MinMaxScaler,OneHotEncoder
 from sklearn.model_selection import train_test_split
+from sklearn.impute import SimpleImputer
 import pandas as pd
 
 BATCH_SIZE=1
@@ -59,8 +60,6 @@ class IHDPDataSampler(object):
         x = data[:, 5:]
         self.xtrain, self.xtest, self.ttrain, self.ttest, self.ytrain, self.ytest, self.yctftrain, self.yctftest = train_test_split(x, t, y, y_ctf, test_size=0.1)
 
-        print(self.xtrain.shape, self.ttrain.shape, self.ytrain.shape, self.yctftrain.shape)
-        print(self.xtest.shape, self.ttest.shape, self.ytest.shape, self.yctftest.shape)
         self.n_samples,self.n_features=self.xtrain.shape
         self.n_samples_test = self.xtest.shape[0]
         self.shape=[self.n_features]
@@ -79,40 +78,109 @@ class IHDPDataSampler(object):
     def get_test_i(self,i):
         return np.reshape(self.xtest[i,:],[1,-1]),np.reshape(self.ytest[i,:],[1,-1])
 
+def preprocess(dataframe,data_types_file):
+    s = open(data_types_file, 'r').read()
+    types_dict = eval(s)
+
+    column_names = sorted(dataframe.columns)
+    dataframe = dataframe[column_names]
+    data = np.asarray(dataframe)
+    #Construct the data matrices
+    data_complete = []
+    column_names_new = []
+    for i,column in enumerate(column_names):
+        if types_dict[column] == 'cat' or types_dict[column]=='ord':
+            #Get categories
+            cat_data = [int(x) for x in data[:,i] if ~np.isnan(x)]
+            categories, indexes = np.unique(cat_data,return_inverse=True)
+            #Transform categories to a vector of 0:n_categories
+            new_categories = np.arange(int(len(categories)))
+            cat_data = new_categories[indexes]
+            #Create one hot encoding for the categories
+            aux = np.zeros([np.shape(data)[0],len(new_categories)])
+            aux[np.where(~np.isnan(data[:,i]))[0],cat_data] = 1
+            data_complete.append(aux)
+            column_names_new.extend([column_names[i]+'_'+ str(kk) for kk in range(len(new_categories))])
+        else:
+            imp = SimpleImputer(strategy='mean')
+            data_vec = imp.fit_transform(np.reshape(data[:,i],[np.shape(data)[0],1]))
+            data_vec = np.reshape(data_vec,[np.shape(data)[0],1])
+            data_complete.append(data_vec)
+            column_names_new.append(column_names[i])
+
+    data_new = np.concatenate(data_complete,1)
+    column_names_new = column_names_new
+    data_new = pd.DataFrame(data_new,columns=column_names_new)
+    return data_new
+
 
 class TwinsDataSampler(object):
-    def __init__(self, p_heavier=0.5):
+    def __init__(self, simulate_confounding=1.0):
         self.n_labels = 2
-        x_raw = pd.read_csv('twins/twin_pairs_X_3years_samesex.csv')
-        t_raw = pd.read_csv('twins/twin_pairs_T_3years_samesex.csv')
-        y_raw = pd.read_csv('twins/twin_pairs_Y_3years_samesex.csv')
+        
         # select the 46 columns from CEVAE paper
-        fields = ['adequacy', 'alcohol', 'anemia', 'birattnd', 'brstate', 'brstate_reg', 'cardiac', 'chyper', 'cigar6', 'crace', 'csex', 'dfageq', 'diabetes', 'dlivord_min', 'dmar', 'drink5', 'dtotord_min', 'eclamp', 'feduc6', 'frace', 'gestat10', 'hemo', 'herpes', 'hydra', 'incervix', 'lung', 'mager8', 'meduc6', 'mplbir', 'mplbir_reg', 'mpre5', 'mrace', 'nprevistq', 'orfath', 'ormoth', 'othermr', 'phyper', 'pldel', 'pre4000', 'preterm', 'renal', 'rh', 'stoccfipb', 'stoccfipb_reg', 'tobacco', 'uterine']
+        #fields = ['adequacy', 'alcohol', 'anemia', 'birattnd', 'brstate', 'brstate_reg', 'cardiac', 'chyper', 'cigar6', 'crace', 'csex', 'dfageq', 'diabetes', 'dlivord_min', 'dmar', 'drink5', 'dtotord_min', 'eclamp', 'feduc6', 'frace', 'gestat10', 'hemo', 'herpes', 'hydra', 'incervix', 'lung', 'mager8', 'meduc6', 'mplbir', 'mplbir_reg', 'mpre5', 'mrace', 'nprevistq', 'orfath', 'ormoth', 'othermr', 'phyper', 'pldel', 'pre4000', 'preterm', 'renal', 'rh', 'stoccfipb', 'stoccfipb_reg', 'tobacco', 'uterine']
+
+        s = open('../CEVAE-master/datasets/TWINS/covar_type.txt', 'r').read()
+        fields = sorted(list(eval(s).keys()))
+        fields.remove('bord')
+        fields.remove('infant_id')
+
+        x_raw = pd.read_csv('../CEVAE-master/datasets/TWINS/twin_pairs_X_3years_samesex.csv',usecols=fields)
+        t_raw = pd.read_csv('../CEVAE-master/datasets/TWINS/twin_pairs_T_3years_samesex.csv',usecols=['dbirwt_0','dbirwt_1'])
+        y_raw = pd.read_csv('../CEVAE-master/datasets/TWINS/twin_pairs_Y_3years_samesex.csv',usecols=['mort_0','mort_1'])
+        x_raw = x_raw.where(pd.notnull(x_raw), np.nan)
         x_raw = x_raw[fields]
+
         # select rows where both twins <2kg at birth
         low_weight = (t_raw["dbirwt_0"]<2000) & (t_raw["dbirwt_1"]<2000)
-        x = np.asarray(x_raw[low_weight])
-        t = np.asarray(t_raw[low_weight])
-        y = np.asarray(y_raw[low_weight])
+        self.x = np.asarray(x_raw[low_weight])
+        self.t = np.asarray(t_raw[low_weight])
+        self.y = np.asarray(y_raw[low_weight])
 
-        # select only one of the twins
-        xlight, xheavy, tlight, theavy, ylight, yheavy = train_test_split(x, t, y, test_size=0.5)
-        tlight = tlight[:,1]
-        ylight = ylight[:,1]
-        theavy = theavy[:,1]
-        yheavy = yheavy[:,2]
-        # features include treatment and covariates
-        t = np.expand_dims(np.hstack([tlight, theavy]), axis=1)
-        x = np.hstack([np.vstack([xlight, xheavy]), t])
-        y = np.expand_dims(np.hstack([ylight, yheavy]), axis=1)
-        self.xtrain, self.xtest, self.ytrain, self.ytest = train_test_split(x, y, test_size=0.1)
+        idx_valid = np.union1d(np.where(~np.isnan(self.t).any(axis=1))[0],np.where(~np.isnan(self.y).any(axis=1))[0])
+        #should be all the rows
+        self.x = self.x[idx_valid]
+        self.t = self.t[idx_valid]
+        self.y = self.y[idx_valid]
 
-        self.scaler=MinMaxScaler()
+        data_filtered = pd.DataFrame(self.x,columns=fields)
+        data_new= preprocess(data_filtered,'../CEVAE-master/datasets/TWINS/covar_type.txt')
+
+        if not simulate_confounding:
+            #simulates rct - if 1 choose heavier twin, choose lighter otherwise
+            self.ttrain = np.random.choice([0,1],size=self.x.shape[0],replace=True)
+            self.wtrain = np.asarray([self.t[idx,p] for idx,p in zip(range(self.t.shape[0]),self.ttrain)])
+            self.ytrain = np.asarray([self.y[idx,p] for idx,p in zip(range(self.y.shape[0],self.ttrain))])
+            self.xtrain = np.asarray(data_new)
+            self.wtest = np.asarray([self.t[idx,p] for idx,p in zip(range(self.t.shape[0]),1-self.ttrain)])
+            self.ytest= np.asarray([self.y[idx,p] for idx,p in zip(range(self.y.shape[0]),1-self.ttrain)])
+            self.xtest = np.asarray(data_new)
+            self.ttest = 1-self.ttrain
+        else:
+            idx = [i for i in range(len(x_raw.columns)) if  x_raw.columns[i]!='gestat10']
+            idx_g = np.setdiff1d(range(len(x_raw.columns)),idx)
+            w_0 = np.random.normal(0,0.1,size=len(idx))
+            w_h = np.random.normal(5,0.1,size=1)
+            #scaler = StandardScaler()
+            #tmp_idx = scaler.fit_transform(foo[:,idx])
+            #pvec = scipy.special.expit(((w_h*self.x[:,idx_g])/(10-0.1)).flatten()+ np.matmul(tmp_idx,w_0))
+            pvec = scipy.special.expit((w_h*self.x[:,idx_g]/(10-0.1)).flatten()).flatten()
+            idx_valid = np.where([not np.isnan(f) for f in pvec])[0]
+            self.ttrain = np.asarray([np.random.binomial(1,pp,1) for pp in pvec[idx_valid]])
+            self.xtrain = np.asarray(data_new)[idx_valid,:]
+            self.ytrain = np.asarray([self.y[idx,p] for idx,p in zip(idx_valid,self.ttrain)])
+            self.wtrain = np.asarray([self.t[idx,p] for idx,p in zip(idx_valid,self.ttrain)]) 
+            self.ttest = 1-self.ttrain
+            self.xtest = np.asarray(data_new)[idx_valid,:]
+            self.ytest = np.asarray([self.y[idx,p] for idx,p in zip(idx_valid,self.ttest)])
+            self.wtest = np.asarray([self.t[idx,p] for idx,p in zip(idx_valid,self.ttest)])
+
+        self.scaler=StandardScaler()
         self.scaler.fit(self.xtrain)
         self.enc = OneHotEncoder(handle_unknown='ignore')
         self.ytrain=self.enc.fit_transform(self.ytrain).toarray()
         self.ytest = self.enc.transform(self.ytest).toarray()
-        #print(self.ytest.shape,type(self.ytest))
         self.xtrain = self.scaler.transform(self.xtrain)
         self.xtest = self.scaler.transform(self.xtest)
         self.n_samples,self.n_features=self.xtrain.shape
@@ -126,7 +194,8 @@ class TwinsDataSampler(object):
 
     def get_test(self):
         return self.xtest, self.ytest
-def get_test_i(self,i):
+
+    def get_test_i(self,i):
         return np.reshape(self.xtest[i,:],[1,-1]),np.reshape(self.ytest[i,:],[1,-1])
 
 
@@ -134,9 +203,10 @@ class NoiseSampler(object):
     def __call__(self, batch_size, z_dim):
         return np.random.normal(size=[batch_size, z_dim])
 
-
 if __name__ == '__main__':
     #xtrain, ytrain, xtest, ytest = load_mnist()
-    x_sampler = IHDPDataSampler()
-    xtrain, ytrain = x_sampler(batch_size=32, batch_index=0)
-    print('n labels:', len(np.where(np.argmax(x_sampler.ytest,1)==0)[0]),len(np.where(np.argmax(x_sampler.ytest,1)==1)[0]))
+    xs = TwinsDataSampler()
+    #print(xs.xtrain.shape,xs.ytrain.shape,xs.ttrain.shape,xs.xtest.shape)
+    #xtrain, ytrain = x_sampler(batch_size=32, batch_index=0)
+    #print('n labels:', len(np.where(np.argmax(x_sampler.ytest,1)==0)[0]),len(np.where(np.argmax(x_sampler.ytest,1)==1)[0]))
+
