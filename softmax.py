@@ -4,7 +4,7 @@ import tensorflow.contrib.layers as tcl
 
 class estimator(object):
     def __init__(self,reg_penalty=0.):
-        self.x_dim = 344 #20
+        self.x_dim = 355 #20
         self.n_labels = 2
         self.n_hidden = 64
         self._name = None

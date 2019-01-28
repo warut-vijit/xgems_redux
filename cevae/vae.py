@@ -5,9 +5,9 @@ from cevae.utils import fc_net
 
 def cevae_decoder(z, h, n_output, keep_prob, reuse=False, nh=3, lamba=1e-4):
     with tf.variable_scope("defaultCredit/cevae/decoder"):
-        # specific to IHDP
-        binfeats = [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
-        contfeats = [i for i in range(25) if i not in binfeats]
+        # all features for Twins dataset are binary
+        binfeats = [i for i in range(355)]
+        contfeats = []
 
         activation = tf.nn.elu
 

@@ -89,7 +89,7 @@ def preprocess(dataframe,data_types_file):
     data_complete = []
     column_names_new = []
     for i,column in enumerate(column_names):
-        if types_dict[column] == 'cat' or types_dict[column]=='ord':
+        if types_dict[column] == 'cat' or types_dict[column]=='ord' or types_dict[column] == 'cyc':
             #Get categories
             cat_data = [int(x) for x in data[:,i] if ~np.isnan(x)]
             categories, indexes = np.unique(cat_data,return_inverse=True)

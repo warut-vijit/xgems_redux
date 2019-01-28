@@ -64,7 +64,7 @@ class explainer(object):
 
         self.reg = tf.square(self.x_star - self.f_)
         self.reg = self.lambda_reg*tf.reduce_sum(self.reg)
-        self.loss1 = tf.reduce_sum(tf.square(self.y_tar-self.ypred))
+        self.loss1 = -tf.reduce_sum(self.y_tar*tf.log(self.ypred))
         self.loss = self.loss1 + self.reg
 
         self.op_grad = tf.train.GradientDescentOptimizer(learning_rate=0.01)
@@ -79,13 +79,14 @@ class explainer(object):
 
         n_defaults=0.
         n_defaults_correct=0.
-        total_error = 0.
+        n_match=0.
         n_total=0.
         for n in range(0,self.x_sampler.n_samples):
-            x_in,y_star,t,yctf = self.x_sampler(batch_size=BATCH_SIZE,batch_index=n,ctf=True)
+            x_in,y_star = self.x_sampler(batch_size=BATCH_SIZE,batch_index=n)
             #x_in,y_star = self.x_sampler.get_test_i(n)
             x_star=x_in
             #print(y_star.shape)
+            y_star_label=np.argmax(y_star,1)
 
             #1: no default,0:default
             #print('x_star min max: ',np.min(x_star,1),np.max(x_star,1))
@@ -98,21 +99,17 @@ class explainer(object):
             
             #print('*** predicted label for original sample:',ypredorig[0,0])
 
-            # target is higher of (counterfactual, 6.5)
-            y_tar = np.clip(yctf, 6.5, None) 
-            #y_tar = np.reshape(np.asarray([0,0]),[BATCH_SIZE,self.n_labels])
-            #y_tar[0,1-y_star_label]=1.
+            y_tar = np.reshape(np.asarray([0,0]),[BATCH_SIZE,self.n_labels])
+            y_tar[0,1-y_star_label]=1.
 
-            # evaluate error due to autoencoder
-            n_total+=1
-            total_error += np.abs(ypredorig[0,:] - y_star)
-            print('average reconstruction error:', total_error/n_total)
+            if np.argmax(ypredorig[0,:])==0:
+                n_total+=1
+                if np.argmax(ypredorig[0,:])==np.argmax(ypred0[0,:]):
+                    n_match+=1
+                print('********* correct reconstruction:', n_match/float(n_total+1))
            
             str_n=''
-            # measure agreement based on above/below 6.5 threshold
-            orig_above = (ypredorig[0,:] >= 6.5)
-            ystar_above = (y_star[0,:] >= 6.5)
-            if orig_above == ystar_above:
+            if np.argmax(ypredorig[0,:])==np.argmax(y_star[0,:]):
                 print('Classifier classified correctly')
                 str_n += '_' + '1'
             else:
@@ -120,18 +117,15 @@ class explainer(object):
                 str_n += '_' + '0'
                 continue
 
-            # skip if classifier and ground truth agree on high score
-            if orig_above: #person does not default
+            if y_star_label==1: #person does not default
                 continue
             else:
-                print('*** sample has bad outcome')
+                print('*** sample defaults on credit')
                 n_defaults+=1
 
             print('Decoder at init:', np.min(x_gen0), np.max(x_gen0), 'label:' ,ypred0,'original pred:', ypredorig)
 
-            recon_above = (ypred0[0,:] >= 6.5)
-            ystar_above = (y_star[0,:] >= 6.5)
-            if recon_above == ystar_above:
+            if np.argmax(ypred0[0,:])==np.argmax(y_star[0,:]):
                 print('Reconstruction classified correctly')
                 str_n = str(n) + '_' + '1'
             else:
@@ -139,7 +133,7 @@ class explainer(object):
                 str_n = str(n) + '_' + '0'
                 continue
 
-            print('Sample [%d] True y [%d] Pred y [%d] Pred y gen [%d] Target y [%d]'% (n,y_star,ypredorig,ypred0 ,y_tar))
+            print('Sample [%d] True label [%d] Pred label [%d] Pred label gen [%d] Target label [%d]'% (n,y_star_label,np.argmax(ypredorig),np.argmax(ypred0) ,np.argmax(y_tar)))
             
             dest_path ='logs/{}/{}/n{}'.format('recourse','no_reg',str_n) 
             dir_path = dest_path
@@ -150,13 +144,13 @@ class explainer(object):
             np.savetxt(filename,x_in)
 
             file_log = open(dest_path + '/confidence_prediction.txt','w+')
-            filename =  (dest_path +'/t{}_pred{}.txt').format(1,recon_above)
+            filename =  (dest_path +'/t{}_pred{}.txt').format(1,np.argmax(ypred0[0,:]))
             np.savetxt(filename,x_gen0)
 
-            file_log.write('0' + ',' + str(ypredorig[0,0])+'\n')
-            file_log.write('1 ' + ',' + str(ypred0[0,0]) + '\n')
+            file_log.write('0' + ',' + str(ypredorig[0,0]) + ',' + str(ypredorig[0,1]) +'\n')
+            file_log.write('1 ' + ',' + str(ypred0[0,0]) + ',' + str(ypred0[0,1]) + '\n')
 
-            print('Sample [%d] True label [%d] Pred label [%d] Target label [%d]'% (n,y_star,ypredorig[0,:], y_tar[0,:]))
+            print('Sample [%d] True label [%d] Pred label [%d] Target label [%d]'% (n,y_star_label,np.argmax(ypredorig[0,:]), np.argmax(y_tar[0,:])))
 
             #iter_max = 20000
             iter_max = 1
@@ -166,8 +160,7 @@ class explainer(object):
                 
                 _, loss1, reg, gvs, y_pred, f_in = self.sess.run([self.grad_map,self.loss1,self.reg,self.gvs,self.ypred,self.f_],feed_dict={self.x_star:x_star,self.y_star:y_star,self.y_tar:y_tar,self.lambda_reg:0.0001})
 
-                # success if new prediction > target
-                if y_pred[0,:]>=y_tar[0,:] and break_t==iter_max:
+                if np.argmax(y_pred[0,:])==np.argmax(y_tar[0,:]) and break_t==iter_max:
                     print('predicted change in label', y_pred[0,0], t, y_tar[0,0])
                     break_t = t+10
 
@@ -183,11 +176,11 @@ class explainer(object):
 
                 if t %100 == 0 or t%1==0:
                     if t%100==0:
-                        print('Iter [%8d] loss_entropy [%.4f] reg [%.4f] gradient Norm [%.4f] predicted_label [%.4f]'% (t,loss1,reg,np.linalg.norm(gvs[0]), y_pred[0,:]))
+                        print('Iter [%8d] loss_entropy [%.4f] reg [%.4f] gradient Norm [%.4f] predicted_label [%.4f]'% (t,loss1,reg,np.linalg.norm(gvs[0]), np.argmax(y_pred[0,:])))
                         #print('ypred',y_pred[0,:],'y_tar', y_tar[0,:])
                         filename =  (dest_path + '/t{}_pred{}.txt').format(t+2,int(y_pred[0,0]>0.5))
                         np.savetxt(filename,f_in)
-                        file_log.write(str(t+2) + ',' + str(y_pred[0,0]) + '\n')
+                        file_log.write(str(t+2) + ',' + str(y_pred[0,0]) + ',' + str(y_pred[0,1]) + '\n')
 
                 if t==break_t:
                     break
@@ -216,7 +209,7 @@ if __name__ == '__main__':
     model = importlib.import_module('explainer_utils')
     #con_detector = importlib.import_module(args.data + '.entities_celebA_vae_resnet_bn_gender',package='..')
 
-    xs = data.IHDPDataSampler()
+    xs = data.TwinsDataSampler()
     generator = model.generator(args.data + '/' + args.generator)
 
     if args.classifier==None:
