@@ -149,9 +149,9 @@ class TwinsDataSampler(object):
 
         if not simulate_confounding:
             #simulates rct - if 1 choose heavier twin, choose lighter otherwise
-            self.ttrain = np.random.choice([0,1],size=self.x.shape[0],replace=True)
+            self.ttrain = np.random.choice([0,1],size=[self.x.shape[0],1],replace=True)
             self.wtrain = np.asarray([self.t[idx,p] for idx,p in zip(range(self.t.shape[0]),self.ttrain)])
-            self.ytrain = np.asarray([self.y[idx,p] for idx,p in zip(range(self.y.shape[0],self.ttrain))])
+            self.ytrain = np.asarray([self.y[idx,p] for idx,p in zip(range(self.y.shape[0]),self.ttrain)])
             self.xtrain = np.asarray(data_new)
             self.wtest = np.asarray([self.t[idx,p] for idx,p in zip(range(self.t.shape[0]),1-self.ttrain)])
             self.ytest= np.asarray([self.y[idx,p] for idx,p in zip(range(self.y.shape[0]),1-self.ttrain)])
